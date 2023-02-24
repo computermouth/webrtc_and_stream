@@ -8,8 +8,6 @@
  */
 'use strict';
 
-console.log(streamSaver);
-
 let localConnection;
 let remoteConnection;
 let sendChannel;
@@ -51,7 +49,14 @@ async function handleFileInputChange() {
   }
 }
 
+let filehandle = null;
+let writable = null;
+
 async function createConnection() {
+  filehandle = await window.showSaveFilePicker();
+  // debugger
+  writable = await filehandle.createWritable();
+  
   abortButton.disabled = false;
   sendFileButton.disabled = true;
   localConnection = new RTCPeerConnection();
@@ -166,9 +171,6 @@ async function gotRemoteDescription(desc) {
   await localConnection.setRemoteDescription(desc);
 }
 
-let fileStream = streamSaver.createWriteStream("bigfarts");
-let writer = fileStream.getWriter();
-
 function receiveChannelCallback(event) {
   console.log('Receive Channel Callback');
   receiveChannel = event.channel;
@@ -177,8 +179,6 @@ function receiveChannelCallback(event) {
   receiveChannel.onopen = onReceiveChannelStateChange;
   receiveChannel.onclose = onReceiveChannelStateChange;
 
-  
-  
   receivedSize = 0;
   bitrateMax = 0;
   downloadAnchor.textContent = '';
@@ -189,23 +189,21 @@ function receiveChannelCallback(event) {
   }
 }
 
-function onReceiveMessageCallback(event) {
+async function onReceiveMessageCallback(event) {
   console.log(`Received Message ${event.data.byteLength}`);
-  receiveBuffer.push(event.data);
+  // receiveBuffer.push(event.data);
   receivedSize += event.data.byteLength;
   receiveProgress.value = receivedSize;
   
-  writer.write(event.data);
+  await writable.write(event.data);
 
   // we are assuming that our signaling protocol told
   // about the expected file size (and name, hash, etc).
   const file = fileInput.files[0];
   if (receivedSize === file.size) {
-    
-    writer.close();
-    
     const received = new Blob(receiveBuffer);
     receiveBuffer = [];
+    await writable.close();
 
     downloadAnchor.href = URL.createObjectURL(received);
     downloadAnchor.download = file.name;
